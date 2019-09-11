@@ -1,8 +1,11 @@
 const Commando = require('discord.js-commando');
 const path = require('path');
 const sqlite = require('sqlite');
+var _ = require('lodash');
 const config = require('./config.json')
 const package = require('./package.json')
+var Tracker = require('./Monitor/Tracker.js')
+var System = require('./System.js')
 
 /***********************************MYSQL*DATABASE***********************************/
 var mysql = require('mysql');
@@ -21,7 +24,7 @@ con.connect(function(err) {
     return;
   }
  
-  console.log('Database connected as threadID: ' + con.threadId);
+  System.data.srvlog('Database connected as threadID: ' + con.threadId);
 });
 
 /************************************************************************************/
@@ -47,21 +50,33 @@ client.registry
     .registerCommandsIn(path.join(__dirname, 'commands'));
 
 client.once('ready', async() => {
-    console.log(`Logged in as ${client.user.tag}`)
+    System.data.srvlog(`Logged in as ${client.user.tag}`)
     client.user.setActivity('test')
+
 })
 
-client.on('message', msg => {
-    console.log('Message')
+client.on('message', msg => {//TESTED WORKING
+    if (msg.author == client.user){
+        return 
+    }
+    Tracker.data.MessageTracker(msg, con)
 });
 
-client.on('voiceStateUpdate', member => {
-    console.log('Message')
+client.on('voiceStateUpdate', (oldMember, newMember) => {
+    Tracker.data.VoiceTracker(oldMember, newMember, con)
 });
+
 
 client.on("guildCreate", guild => {
     console.log("Joined a new guild: " + guild.name);
     con.query(`INSERT INTO discordguilds (GuildID, GuildName) VALUES(?, ?)`, [guild.id, guild.name]);
+
+    /*POPULATE USERS TABLE*/
+    guild.members.forEach(member => {
+        System.data.AddMember(member, con)
+    });
+    /*END POPULATE USERS TABLE*/
+
 })
   
 client.on("guildDelete", guild => {
@@ -74,5 +89,11 @@ client.on('error', console.error)
 client.setProvider(
     sqlite.open(path.join(__dirname, 'settings.sqlite3')).then(db => new Commando.SQLiteProvider(db))
 ).catch(console.error);
+
+function myFunction() {
+    console.log("sup")
+}
+
+//client.setInterval(myFunction, 10000) //loop task (function, Delay ms, args)
 
 client.login(config.token);
